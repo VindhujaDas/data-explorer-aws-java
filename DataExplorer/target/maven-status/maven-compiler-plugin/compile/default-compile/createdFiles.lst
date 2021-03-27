@@ -1,0 +1,5 @@
+models/Workspace.class
+models/Message.class
+models/Response.class
+models/Error.class
+models/Status.class
