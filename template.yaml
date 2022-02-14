@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  data-explorer
+
+  Sample SAM Template for data-explorer
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+      Runtime: java11
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          ORDERS_TABLE: !Ref ExplorersTable 
+
+Resources:
+  ExplorerDLQ:
+    Type: AWS::SNS::Topic
+  ExplorerProvisionTopic:
+    Type: AWS::SNS::Topic
+  ExplorersTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: id
+        Type: Number
+  CreateExplorerFunction:
+    Type: AWS::Serverless::Function 
+    Properties: 
+      CodeUri: Explorer
+      Handler: lambda.CreateExplorerLambda::createExplorer
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt ExplorerProvisionTopic.TopicName #provision_Explorer
+      Environment:
+          PROVISION_WORKSPACE_TOPIC: !Ref ExplorerProvisionTopic
+      Events:
+        ExplorerEvents:
+          Type: Api 
+          Properties:
+            Path: /Explorer
+            Method: POST
+  ReadExplorersFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: Explorer
+      Handler: lambda.GetExplorersLambda::getExplorers
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ExplorersTable
+      Environment:
+          WORKSPACE_TABLE: !Ref ExplorersTable
+      Events:
+        OrderEvents:
+          Type: Api
+          Properties:
+            Path: /Explorer
+            Method: GET
+  InitializeExplorerFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: Explorer
+      Handler: lambda.InitializerLambda::setupExplorer
+      DeadLetterQueue:
+        Type: SNS
+        TargetARN: !Ref ExplorerDLQ
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ExplorersTable
+      Events:
+        SNSEvent:
+          Type: SNS # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Topic: !Ref ExplorerProvisionTopic
+      Environment:
+        Variables:
+          Explorer_TABLE: !Ref ExplorersTable
+  ErrorHandlingFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: Explorer
+      Handler: api.ErrorHandlerLambda::errorHandler
+      Events:
+        SNSEvent:
+          Type: SNS # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Topic: !Ref ExplorerDLQ
+
+Outputs:
+  CreateExplorerAPI:
+    Description: "API Gateway endpoing url for create Explorer function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/Explorer/"
+  ReadExplorersAPI:
+    Description: "API Gateway endpoing url for get Explorers function"
+    Value: !GetAtt ReadExplorersFunction.Arn
