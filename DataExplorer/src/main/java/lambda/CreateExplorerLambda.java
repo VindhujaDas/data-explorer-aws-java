@@ -43,7 +43,7 @@ public class CreateExplorerLambda {
                     .withBody(objectMapper.writeValueAsString(error));
         }
 
-        logger.log("***** mocking REST call to provision QueryGrid and SQLE with query-service *****");
+        logger.log("***** mocking REST call to provision posrgres and setup query-service *****");
 
         // Just to simulate an error scenario for demo
         if (explorer.getId() < 0) {
